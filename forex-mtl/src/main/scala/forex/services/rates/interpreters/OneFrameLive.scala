@@ -12,7 +12,6 @@ import forex.services.rates.{ errors, Algebra }
 import org.http4s.{ Header, Headers, Request, Uri }
 
 import java.time.{ Duration, OffsetDateTime }
-//import org.http4s.circe.CirceEntityCodec.circeEntityDecoder
 import org.http4s.circe.CirceEntityDecoder._
 import org.http4s.client.Client
 
@@ -47,25 +46,35 @@ class OneFrameLive[F[_]: Sync](sourceUrl: String,
         .toMap
     } yield c
 
-  def updateState() =
+  def updateState(): EitherT[F, Error, Unit] =
     for {
       a <- fetchRates()
       _ <- EitherT.liftF[F, Error, Unit](state.set(a))
     } yield ()
 
+  def process(pair: Rate.Pair): F[Either[Error, Rate]] =
+    (for {
+
+      a <- EitherT.right(shouldUpdate(pair))
+      _ = Sync[F].delay(println(a))
+      _ <- if (a) updateState() else EitherT.right(Sync[F].unit)
+      c <- EitherT {
+            state.get.map(
+              _.get(pair) match {
+                case Some(value) => Right(value).withLeft[Error]
+                case None        => Left(Error.UnexpectedError(s"Still cannot get pair $pair from state"))
+              }
+            )
+          }
+    } yield c).value
+
   override def get(pair: Rate.Pair): F[Either[errors.Error, Rate]] =
     for {
       _ <- lock.acquire
-      b <- shouldUpdate(pair)
-      _ <- if (b) updateState().value else (Sync[F].unit)
-      d <- state.get.map(
-            _.get(pair) match {
-              case Some(value) => Right(value)
-              case None        => Left(Error.UnexpectedError(s"Still cannot get pair $pair"))
-            }
-          )
+      a <- process(pair)
       _ <- lock.release
-    } yield d
+    } yield a
+
 }
 
 object OneFrameLive {

@@ -1,7 +1,7 @@
 package forex
 
 import cats.effect.concurrent.{ Ref, Semaphore }
-import cats.effect.{ Blocker, ConcurrentEffect, ContextShift, ExitCode, IO, IOApp, Timer }
+import cats.effect.{ ConcurrentEffect, ContextShift, ExitCode, IO, IOApp, Timer }
 import cats.implicits._
 import forex.config._
 import forex.domain.Rate
@@ -11,30 +11,25 @@ import forex.services.rates.errors.Error
 import forex.services.rates.interpreters.OneFrameLive
 import fs2.Stream
 import org.http4s.Request
-import org.http4s.client.{ Client, JavaNetClientBuilder }
+import org.http4s.client.blaze.BlazeClientBuilder
 import org.http4s.server.blaze.BlazeServerBuilder
 
-import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext
 
 object Main extends IOApp {
   val ec = scala.concurrent.ExecutionContext.global
 
-  def runMyApp[F[_]: ConcurrentEffect: Timer: ContextShift]: F[ExitCode] = {
-    val blockingPool          = Executors.newFixedThreadPool(5)
-    val blocker               = Blocker.liftExecutorService(blockingPool)
-    val httpClient: Client[F] = JavaNetClientBuilder[F](blocker).create
-    for {
-      state <- Ref.of[F, Map[Pair, Rate]](Map.empty)
-      lock <- Semaphore[F](1)
-      client = OneFrameLive.liveClient[F](httpClient)(_)
-    } yield new Application[F].stream(ec, lock, state, client).compile.drain.as(ExitCode.Success)
-  }.flatten
+  def runMyApp[F[_]: ConcurrentEffect: Timer: ContextShift]: F[ExitCode] =
+    BlazeClientBuilder[F](ec).resource.use { httpClient =>
+      (for {
+        state <- Ref.of[F, Map[Pair, Rate]](Map.empty)
+        lock <- Semaphore[F](1)
+        client = OneFrameLive.liveClient[F](httpClient)(_)
+      } yield (state, lock, client))
+        .flatMap(p => new Application[F].stream(ec, p._2, p._1, p._3).compile.drain.as(ExitCode.Success))
+    }
 
   override def run(args: List[String]): IO[ExitCode] = runMyApp[IO]
-
-  //  override def run(args: List[String]): IO[ExitCode] =
-  //    new Application[IO].stream(executionContext).compile.drain.as(ExitCode.Success)
 
 }
 
