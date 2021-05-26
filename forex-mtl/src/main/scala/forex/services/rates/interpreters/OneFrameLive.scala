@@ -53,22 +53,19 @@ class OneFrameLive[F[_]: Sync](sourceUrl: String,
       _ <- EitherT.liftF[F, Error, Unit](state.set(a))
     } yield ()
 
-  override def get(pair: Rate.Pair): F[Either[errors.Error, Rate]] = {
+  override def get(pair: Rate.Pair): F[Either[errors.Error, Rate]] =
     for {
-      _ <- EitherT.liftF[F, Error, Unit](lock.acquire)
-      b <- EitherT.liftF[F, Error, Boolean](shouldUpdate(pair))
-      _ <- if (b) updateState() else EitherT.liftF[F, Error, Unit](Sync[F].unit)
-      d <- EitherT(
-            state.get.map(
-              _.get(pair) match {
-                case Some(value) => Right(value)
-                case None        => Left(Error.UnexpectedError(s"Still cannot get pair $pair"))
-              }
-            )
+      _ <- lock.acquire
+      b <- shouldUpdate(pair)
+      _ <- if (b) updateState().value else (Sync[F].unit)
+      d <- state.get.map(
+            _.get(pair) match {
+              case Some(value) => Right(value)
+              case None        => Left(Error.UnexpectedError(s"Still cannot get pair $pair"))
+            }
           )
-      _ <- EitherT.liftF[F, Error, Unit](lock.release)
+      _ <- lock.release
     } yield d
-  }.value
 }
 
 object OneFrameLive {
@@ -89,7 +86,7 @@ object OneFrameLive {
       .map(
         p =>
           p.fold(
-            _ => Left(Error.UnexpectedError("Unable to fetch rates from One Api")),
+            e => Left(Error.UnexpectedError(e.getMessage)),
             q => Right(q)
         )
       )
