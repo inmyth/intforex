@@ -23,8 +23,10 @@ class OneFrameLive[F[_]: Sync](sourceUrl: String,
                                client: Request[F] => F[Either[Error, List[GetApiResponse]]])
     extends Algebra[F] {
 
-  val oneApiRequest: Error Either Request[F] = Uri
-    .fromString(s"$sourceUrl/rates?pair=USDCAD")
+  val oneApiRequest: Either[Error, Request[F]] = Uri
+    .fromString(
+      s"$sourceUrl/rates?pair=AUDCAD&pair=AUDCHF&pair=AUDEUR&pair=AUDGBP&pair=AUDNZD&pair=AUDJPY&pair=AUDSGD&pair=AUDUSD&pair=CADAUD&pair=CADCHF&pair=CADEUR&pair=CADGBP&pair=CADNZD&pair=CADJPY&pair=CADSGD&pair=CADUSD&pair=CHFAUD&pair=CHFCAD&pair=CHFEUR&pair=CHFGBP&pair=CHFNZD&pair=CHFJPY&pair=CHFSGD&pair=CHFUSD&pair=EURAUD&pair=EURCAD&pair=EURCHF&pair=EURGBP&pair=EURNZD&pair=EURJPY&pair=EURSGD&pair=EURUSD&pair=GBPAUD&pair=GBPCAD&pair=GBPCHF&pair=GBPEUR&pair=GBPNZD&pair=GBPJPY&pair=GBPSGD&pair=GBPUSD&pair=NZDAUD&pair=NZDCAD&pair=NZDCHF&pair=NZDEUR&pair=NZDGBP&pair=NZDJPY&pair=NZDSGD&pair=NZDUSD&pair=JPYAUD&pair=JPYCAD&pair=JPYCHF&pair=JPYEUR&pair=JPYGBP&pair=JPYNZD&pair=JPYSGD&pair=JPYUSD&pair=SGDAUD&pair=SGDCAD&pair=SGDCHF&pair=SGDEUR&pair=SGDGBP&pair=SGDNZD&pair=SGDJPY&pair=SGDUSD&pair=USDAUD&pair=USDCAD&pair=USDCHF&pair=USDEUR&pair=USDGBP&pair=USDNZD&pair=USDJPY&pair=USDSGD"
+    )
     .fold(
       _ => Left(Error.UnexpectedError("Cannot parse one api url")),
       p => Right(Request(uri = p, headers = Headers(List(Header("token", "10dc303535874aeccc86a8251e6992f5")))))
@@ -55,7 +57,6 @@ class OneFrameLive[F[_]: Sync](sourceUrl: String,
     (for {
 
       a <- EitherT.right(shouldUpdate(pair))
-      _ = Sync[F].delay(println(a))
       _ <- if (a) updateState() else EitherT.right(Sync[F].unit)
       c <- EitherT {
             state.get.map(
