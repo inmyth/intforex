@@ -1,7 +1,7 @@
 package forex
 
 import cats.effect.concurrent.{ Ref, Semaphore }
-import cats.effect.{ ConcurrentEffect, ContextShift, ExitCode, IO, IOApp, Timer }
+import cats.effect.{ ConcurrentEffect, ExitCode, IO, IOApp, Timer }
 import cats.implicits._
 import forex.config._
 import forex.domain.Rate
@@ -14,12 +14,12 @@ import org.http4s.Request
 import org.http4s.client.blaze.BlazeClientBuilder
 import org.http4s.server.blaze.BlazeServerBuilder
 
-import scala.concurrent.ExecutionContext
+import scala.concurrent.{ ExecutionContext, ExecutionContextExecutor }
 
 object Main extends IOApp {
-  val ec = scala.concurrent.ExecutionContext.global
+  val ec: ExecutionContextExecutor = scala.concurrent.ExecutionContext.global
 
-  def runMyApp[F[_]: ConcurrentEffect: Timer: ContextShift]: F[ExitCode] =
+  def runMyApp[F[_]: ConcurrentEffect: Timer]: F[ExitCode] =
     BlazeClientBuilder[F](ec).resource.use { httpClient =>
       (for {
         state <- Ref.of[F, Map[Pair, Rate]](Map.empty)

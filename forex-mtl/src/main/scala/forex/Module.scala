@@ -19,7 +19,7 @@ class Module[F[_]: Concurrent: Timer](config: ApplicationConfig,
                                       state: Ref[F, Map[Pair, Rate]],
                                       client: Request[F] => F[Either[Error, List[GetApiResponse]]]) {
 
-  private val ratesService: RatesService[F] = RatesServices.dummy[F]
+//  private val ratesService: RatesService[F] = RatesServices.dummy[F]
 
   private val liveService = RatesServices.live[F](
     config.live.url,

@@ -41,23 +41,22 @@ class OneFrameLiveTest extends AnyFlatSpec with PrivateMethodTester {
     ),
   )
 
-  def createDummy[F[_]: Sync: Concurrent](sourceUrl: String,
-                                          refresh: Long,
+  def createDummyClient[F[_]: Concurrent](refresh: Long,
                                           client: Request[F] => F[Either[Error, List[GetApiResponse]]],
                                           state: F[Ref[F, Map[Pair, Rate]]]): F[Algebra[F]] =
     for {
       s <- state
       lock <- Semaphore[F](1)
-    } yield OneFrameLive(sourceUrl, refresh, lock, s, client)
+    } yield OneFrameLive("", refresh, lock, s, client)
 
-  def createDummyWithEmptyCache[F[_]: Sync: Concurrent](sourceUrl: String,
-                                                        refresh: Long,
-                                                        client: Request[F] => F[Either[Error, List[GetApiResponse]]],
+  def createDummyClientWithEmptyCache[F[_]: Concurrent](
+      refresh: Long,
+      client: Request[F] => F[Either[Error, List[GetApiResponse]]],
   ): F[Algebra[F]] =
     for {
       s <- Ref.of[F, Map[Pair, Rate]](Map.empty)
       lock <- Semaphore[F](1)
-    } yield OneFrameLive(sourceUrl, refresh, lock, s, client)
+    } yield OneFrameLive("", refresh, lock, s, client)
 
   def dummyGoodClient[F[_]: Sync]: Request[F] => F[Either[Error, List[GetApiResponse]]] =
     _ => Sync[F].pure(createResponse(Timestamp.now).asRight[Error])
@@ -91,7 +90,7 @@ class OneFrameLiveTest extends AnyFlatSpec with PrivateMethodTester {
   it should "return result if client runs correctly" in {
     val refresh = 1L
     val x = (for {
-      dummy <- createDummyWithEmptyCache[IO]("", refresh, dummyGoodClient)
+      dummy <- createDummyClientWithEmptyCache[IO](refresh, dummyGoodClient)
       a <- dummy.get(pair)
     } yield a).unsafeRunSync()
     x.isRight shouldBe true
@@ -101,7 +100,7 @@ class OneFrameLiveTest extends AnyFlatSpec with PrivateMethodTester {
   it should "return left if error occurs in client" in {
     val refresh = 1L
     val x = (for {
-      dummy <- createDummyWithEmptyCache[IO]("", refresh, dummyBadClient)
+      dummy <- createDummyClientWithEmptyCache[IO](refresh, dummyBadClient)
       a <- dummy.get(pair)
     } yield a).unsafeRunSync()
     x.isLeft shouldBe true
@@ -111,7 +110,7 @@ class OneFrameLiveTest extends AnyFlatSpec with PrivateMethodTester {
     val refresh = 1L
     val x = (for {
       a <- Ref.of[IO, Int](0)
-      dummy = createDummyWithEmptyCache[IO]("", refresh, counterClient(a))
+      dummy = createDummyClientWithEmptyCache[IO](refresh, counterClient(a))
       b <- dummy
       _ <- b.get(pair)
       _ <- Timer[IO].sleep((refresh * 2) second)
@@ -126,7 +125,7 @@ class OneFrameLiveTest extends AnyFlatSpec with PrivateMethodTester {
     val nRequest = 5
     val x = (for {
       a <- Ref.of[IO, Int](0)
-      dummy = createDummyWithEmptyCache[IO]("", refresh, counterClient(a))
+      dummy = createDummyClientWithEmptyCache[IO](refresh, counterClient(a))
       b <- dummy
       _ <- (0 until nRequest)
             .map(_ => b.get(pair))
@@ -142,7 +141,7 @@ class OneFrameLiveTest extends AnyFlatSpec with PrivateMethodTester {
     val x = (for {
       a <- Ref.of[IO, Int](0)
       cache = Ref.of[IO, Map[Pair, Rate]](Map(pair -> Rate(pair, Price(BigDecimal(10)), Timestamp.now)))
-      b <- createDummy[IO]("", refresh, counterClient(a), cache)
+      b <- createDummyClient[IO](refresh, counterClient(a), cache)
       _ <- b.get(pair)
       c <- a.get
     } yield c).unsafeRunSync()
@@ -153,7 +152,7 @@ class OneFrameLiveTest extends AnyFlatSpec with PrivateMethodTester {
     val refresh = 1L
     val x = (for {
       a <- Ref.of[IO, Int](0)
-      dummy = createDummyWithEmptyCache[IO]("", refresh, counterClient(a))
+      dummy = createDummyClientWithEmptyCache[IO](refresh, counterClient(a))
       b <- dummy
       _ <- b.get(pair)
       c <- b.get(pair2)

@@ -3,13 +3,12 @@ package forex.http.rates
 import forex.http.rates.Protocol.GetApiResponse
 import org.scalatest.flatspec.AnyFlatSpec
 import io.circe.parser.decode
-import org.scalatest.matchers.must.Matchers.be
 import org.scalatest.matchers.should.Matchers.convertToAnyShouldWrapper
 
 class ProtocolTest extends AnyFlatSpec {
   behavior of "Json decoding of GetApiResponse"
 
-  val okData =
+  val okData: String =
     """
       |[
       |    {
@@ -27,7 +26,7 @@ class ProtocolTest extends AnyFlatSpec {
       |]
       |""".stripMargin
 
-  val dataBadCurrency =
+  val dataBadCurrency: String =
     """
       |[
       |    {
@@ -45,12 +44,12 @@ class ProtocolTest extends AnyFlatSpec {
       |]
       |""".stripMargin
 
-  it should "ok parse good data" in {
+  it should "ok parsing good data" in {
     val x = decode[List[GetApiResponse]](okData)
     x.isRight shouldBe true
   }
 
-  it should "ko parse json with bad currency" in {
+  it should "ko parsing json with bad currency" in {
     val x = decode[List[GetApiResponse]](dataBadCurrency)
     x.isLeft shouldBe true
   }

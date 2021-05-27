@@ -5,10 +5,8 @@ import forex.domain.Currency.show
 import forex.domain.Rate.Pair
 import forex.domain._
 import io.circe._
-import io.circe.generic.decoding.DerivedDecoder.deriveDecoder
 import io.circe.generic.extras.Configuration
-import io.circe.generic.extras.semiauto.{ deriveConfiguredDecoder, deriveConfiguredEncoder }
-import io.circe.generic.semiauto.deriveDecoder
+import io.circe.generic.extras.semiauto.deriveConfiguredEncoder
 
 object Protocol {
 
@@ -37,8 +35,6 @@ object Protocol {
 
   implicit val responseEncoder: Encoder[GetApiResponse] =
     deriveConfiguredEncoder[GetApiResponse]
-
-//  implicit val responseDecoder: Decoder[GetApiResponse] = deriveConfiguredDecoder[GetApiResponse]
 
   implicit val responseDecoder: Decoder[GetApiResponse] = (c: HCursor) =>
     for {
