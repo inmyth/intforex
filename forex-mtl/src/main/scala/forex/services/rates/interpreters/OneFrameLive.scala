@@ -8,6 +8,7 @@ import forex.domain.Rate
 import forex.domain.Rate.Pair
 import forex.http.rates.Protocol.GetApiResponse
 import forex.services.rates.errors.Error
+import forex.services.rates.interpreters.OneFrameLive.isExpired
 import forex.services.rates.{ errors, Algebra }
 import org.http4s.{ Header, Headers, Request, Uri }
 
@@ -29,12 +30,10 @@ class OneFrameLive[F[_]: Sync](sourceUrl: String,
       p => Right(Request(uri = p, headers = Headers(List(Header("token", "10dc303535874aeccc86a8251e6992f5")))))
     )
 
-  def isExpired(in: OffsetDateTime, now: OffsetDateTime): Boolean = Duration.between(in, now).getSeconds > refreshRate
+  private def shouldUpdate(k: Pair): F[Boolean] =
+    state.get.map(_.get(k).fold(true)(p => isExpired(p.timestamp.value, OffsetDateTime.now(), refreshRate)))
 
-  def shouldUpdate(k: Pair): F[Boolean] =
-    state.get.map(_.get(k).fold(true)(p => isExpired(p.timestamp.value, OffsetDateTime.now())))
-
-  def fetchRates(): EitherT[F, Error, Map[Pair, Rate]] =
+  private def fetchRates(): EitherT[F, Error, Map[Pair, Rate]] =
     for {
       a <- EitherT.fromEither[F](oneApiRequest)
       b <- EitherT(client(a))
@@ -46,13 +45,13 @@ class OneFrameLive[F[_]: Sync](sourceUrl: String,
         .toMap
     } yield c
 
-  def updateState(): EitherT[F, Error, Unit] =
+  private def updateState(): EitherT[F, Error, Unit] =
     for {
       a <- fetchRates()
       _ <- EitherT.liftF[F, Error, Unit](state.set(a))
     } yield ()
 
-  def process(pair: Rate.Pair): F[Either[Error, Rate]] =
+  private def process(pair: Rate.Pair): F[Either[Error, Rate]] =
     (for {
 
       a <- EitherT.right(shouldUpdate(pair))
@@ -78,6 +77,9 @@ class OneFrameLive[F[_]: Sync](sourceUrl: String,
 }
 
 object OneFrameLive {
+
+  private def isExpired(in: OffsetDateTime, now: OffsetDateTime, refreshRate: Long): Boolean =
+    Duration.between(in, now).getSeconds > refreshRate
 
   def apply[F[_]: Sync](sourceUrl: String,
                         refreshRate: Long,
