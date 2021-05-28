@@ -113,7 +113,7 @@ class OneFrameLiveTest extends AnyFlatSpec with PrivateMethodTester {
       dummy = createDummyClientWithEmptyCache[IO](refresh, counterClient(a))
       b <- dummy
       _ <- b.get(pair)
-      _ <- Timer[IO].sleep((refresh * 2) second)
+      _ <- Timer[IO].sleep((refresh * 2).seconds)
       _ <- b.get(pair)
       c <- a.get
     } yield c).unsafeRunSync()
