@@ -1,13 +1,16 @@
 package forex.services.rates.interpreters
 
+import cats.Monad
 import cats.effect.concurrent.{ Ref, Semaphore }
 import cats.effect.{ Concurrent, ContextShift, IO, Sync, Timer }
 import cats.implicits._
 import forex.domain.Rate.Pair
 import forex.domain.{ Currency, Price, Rate, Timestamp }
 import forex.http.rates.Protocol.GetApiResponse
+import forex.services.Repo
 import forex.services.rates.Algebra
 import forex.services.rates.errors.Error
+import forex.services.repo.interpreters.LocalCache
 import org.http4s.Request
 import org.scalatest.PrivateMethodTester
 import org.scalatest.flatspec.AnyFlatSpec
@@ -43,26 +46,25 @@ class OneFrameLiveTest extends AnyFlatSpec with PrivateMethodTester {
 
   def createDummyClient[F[_]: Concurrent](refresh: Long,
                                           client: Request[F] => F[Either[Error, List[GetApiResponse]]],
-                                          state: F[Ref[F, Map[Pair, Rate]]]): F[Algebra[F]] =
+                                          repo: Repo[F]): F[Algebra[F]] =
     for {
-      s <- state
       lock <- Semaphore[F](1)
-    } yield OneFrameLive("", refresh, lock, s, client)
+    } yield OneFrameLive("", refresh, lock, repo, client)
 
   def createDummyClientWithEmptyCache[F[_]: Concurrent](
       refresh: Long,
       client: Request[F] => F[Either[Error, List[GetApiResponse]]],
   ): F[Algebra[F]] =
     for {
-      s <- Ref.of[F, Map[Pair, Rate]](Map.empty)
       lock <- Semaphore[F](1)
-    } yield OneFrameLive("", refresh, lock, s, client)
+      ref <- Ref.of[F, Map[Pair, Rate]](Map.empty)
+    } yield OneFrameLive("", refresh, lock, LocalCache(ref), client)
 
-  def dummyGoodClient[F[_]: Sync]: Request[F] => F[Either[Error, List[GetApiResponse]]] =
-    _ => Sync[F].pure(createResponse(Timestamp.now).asRight[Error])
+  def dummyGoodClient[F[_]: Monad]: Request[F] => F[Either[Error, List[GetApiResponse]]] =
+    _ => Monad[F].pure(createResponse(Timestamp.now).asRight[Error])
 
-  def dummyBadClient[F[_]: Sync]: Request[F] => F[Either[Error, List[GetApiResponse]]] =
-    _ => Sync[F].pure(Left(Error.UnexpectedError("na")))
+  def dummyBadClient[F[_]: Monad]: Request[F] => F[Either[Error, List[GetApiResponse]]] =
+    _ => Monad[F].pure(Left(Error.UnexpectedError("na")))
 
   behavior of "isExpired"
   it should "be true when two OffsetDateTime objects differ more than refresh and false if less" in {
@@ -140,8 +142,9 @@ class OneFrameLiveTest extends AnyFlatSpec with PrivateMethodTester {
     val refresh = 1L
     val x = (for {
       a <- Ref.of[IO, Int](0)
-      cache = Ref.of[IO, Map[Pair, Rate]](Map(pair -> Rate(pair, Price(BigDecimal(10)), Timestamp.now)))
-      b <- createDummyClient[IO](refresh, counterClient(a), cache)
+      r <- Ref.of[IO, Map[Pair, Rate]](Map(pair -> Rate(pair, Price(BigDecimal(10)), Timestamp.now)))
+      repo = LocalCache[IO](r)
+      b <- createDummyClient[IO](refresh, counterClient(a), repo)
       _ <- b.get(pair)
       c <- a.get
     } yield c).unsafeRunSync()

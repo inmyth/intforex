@@ -1,10 +1,8 @@
 package forex
 
-import cats.effect.concurrent.{ Ref, Semaphore }
+import cats.effect.concurrent.Semaphore
 import cats.effect.{ Concurrent, Timer }
 import forex.config.ApplicationConfig
-import forex.domain.Rate
-import forex.domain.Rate.Pair
 import forex.http.rates.Protocol.GetApiResponse
 import forex.http.rates.RatesHttpRoutes
 import forex.programs._
@@ -16,7 +14,7 @@ import org.http4s.server.middleware.{ AutoSlash, Timeout }
 
 class Module[F[_]: Concurrent: Timer](config: ApplicationConfig,
                                       lock: Semaphore[F],
-                                      state: Ref[F, Map[Pair, Rate]],
+                                      repo: Repo[F],
                                       client: Request[F] => F[Either[Error, List[GetApiResponse]]]) {
 
 //  private val ratesService: RatesService[F] = RatesServices.dummy[F]
@@ -25,7 +23,7 @@ class Module[F[_]: Concurrent: Timer](config: ApplicationConfig,
     config.live.url,
     config.live.refresh,
     lock,
-    state,
+    repo,
     client
   )
 

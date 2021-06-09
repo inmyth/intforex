@@ -2,12 +2,11 @@ package forex.services.rates
 
 import cats.Applicative
 import cats.effect.Sync
-import cats.effect.concurrent.{ Ref, Semaphore }
-import forex.domain.Rate
-import forex.domain.Rate.Pair
+import cats.effect.concurrent.Semaphore
 import forex.http.rates.Protocol.GetApiResponse
+import forex.services.Repo
 import forex.services.rates.errors.Error
-import interpreters._
+import forex.services.rates.interpreters._
 import org.http4s.Request
 
 object Interpreters {
@@ -16,7 +15,7 @@ object Interpreters {
   def live[F[_]: Sync](sourceUrl: String,
                        refreshRate: Long,
                        lock: Semaphore[F],
-                       state: Ref[F, Map[Pair, Rate]],
+                       repo: Repo[F],
                        client: Request[F] => F[Either[Error, List[GetApiResponse]]]): Algebra[F] =
-    new OneFrameLive[F](sourceUrl, refreshRate, lock, state, client)
+    new OneFrameLive[F](sourceUrl, refreshRate, lock, repo, client)
 }
